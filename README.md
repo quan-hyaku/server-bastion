@@ -4,19 +4,27 @@ A CLI tool for Linux server administration. Wraps common sysadmin tasks — ngin
 
 ## Install
 
-**On an Ubuntu/Debian server (full install):**
+**On an Ubuntu/Debian server:**
 
 ```bash
-sudo bash install.sh
+bash install.sh
 ```
 
-This installs all system dependencies (nginx, postgres, ufw, fail2ban), uv, and bastion as a system-wide command. See [install.sh](install.sh) for details.
+This installs prerequisites (curl, git, python3), uv, and bastion as a user-local command (`~/.local/bin`). No root needed for the tool itself — sudo is used only for system prerequisites and the commands bastion runs (nginx, ufw, etc.).
 
 **From a git repo:**
 
 ```bash
-sudo bash install.sh --repo https://github.com/quan-hyaku/server-bastion.git
+bash <(curl -fsSL https://raw.githubusercontent.com/quan-hyaku/server-bastion/main/install.sh) --repo https://github.com/quan-hyaku/server-bastion.git
 ```
+
+**With passwordless sudo for bastion commands:**
+
+```bash
+bash install.sh --sudoers
+```
+
+This creates `/etc/sudoers.d/bastion` allowing your user to run nginx, ufw, fail2ban, postgres, and sysctl commands without a password prompt.
 
 **Development (local):**
 
