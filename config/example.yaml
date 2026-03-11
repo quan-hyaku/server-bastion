@@ -1,0 +1,28 @@
+# bastion server profile
+# Copy this file and customize for your server.
+# All fields are optional — defaults are used for anything omitted.
+
+name: "production-webserver"
+description: "Production web server running nginx + postgres"
+
+nginx:
+  sites_available: "/etc/nginx/sites-available"
+  sites_enabled: "/etc/nginx/sites-enabled"
+  config_test_cmd: "nginx -t"
+  reload_cmd: "systemctl reload nginx"
+
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  backup_dir: "/var/backups/postgresql"
+
+firewall:
+  backend: "ufw"
+
+fail2ban:
+  client_cmd: "fail2ban-client"
+
+tune:
+  sysctl_conf: "/etc/sysctl.d/99-bastion.conf"
+  limits_conf: "/etc/security/limits.d/99-bastion.conf"
