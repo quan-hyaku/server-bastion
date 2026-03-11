@@ -78,8 +78,11 @@ install_uv() {
     info "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    # Make uv available in current session
-    export PATH="$HOME/.local/bin:$PATH"
+    # Make uv available in current session — cover both root and sudo cases
+    export PATH="/root/.local/bin:$HOME/.local/bin:$PATH"
+    for env_file in /root/.local/bin/env "$HOME/.local/bin/env"; do
+        [[ -f "$env_file" ]] && . "$env_file" && break
+    done
 
     if command -v uv &>/dev/null; then
         success "uv installed: $(uv --version)"
@@ -127,7 +130,7 @@ install_bastion() {
     info "Installing bastion..."
     cd "$INSTALL_DIR"
 
-    export PATH="$HOME/.local/bin:$PATH"
+    export PATH="/root/.local/bin:$HOME/.local/bin:$PATH"
 
     uv sync --no-dev
     uv tool install "$INSTALL_DIR" --force
