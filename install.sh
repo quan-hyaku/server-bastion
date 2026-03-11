@@ -42,6 +42,12 @@ success() { echo -e "\033[1;32m[OK]\033[0m   $*"; }
 warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 fail()    { echo -e "\033[1;31m[FAIL]\033[0m $*"; exit 1; }
 
+check_not_root() {
+    if [[ $EUID -eq 0 ]]; then
+        fail "Do not run this script as root or with sudo. Run as your normal user:\n       bash install.sh [--repo URL] [--sudoers]\n       The script will prompt for sudo only when needed."
+    fi
+}
+
 # ── Step 1: System prerequisites (needs sudo) ───────────────────────
 
 install_prerequisites() {
@@ -242,12 +248,7 @@ setup_path() {
     local tool_bin
     tool_bin="$(uv tool bin-dir 2>/dev/null || echo "$HOME/.local/bin")"
 
-    # Check if bastion is already findable
-    if command -v bastion &>/dev/null; then
-        return
-    fi
-
-    # Add to shell profile
+    # Add to shell profile so future shells find bastion
     local shell_rc=""
     if [[ -f "$HOME/.bashrc" ]]; then
         shell_rc="$HOME/.bashrc"
@@ -280,6 +281,7 @@ main() {
     echo "=================================="
     echo ""
 
+    check_not_root
     install_prerequisites
     install_uv
     install_source

@@ -91,6 +91,9 @@ def _prompt_site_selection(
 ) -> tuple[list[str], list[str]]:
     """Interactive checklist: let user toggle sites on/off.
 
+    Entering a site number flips its current state (ON→OFF, OFF→ON).
+    'a' enables all, 'n' disables all, empty keeps everything unchanged.
+
     Returns (to_enable, to_disable) lists of site names.
     """
     current_status = {
@@ -99,7 +102,7 @@ def _prompt_site_selection(
     }
 
     click.echo(f"\n{label}")
-    click.echo("Enter site numbers to toggle (comma-separated), or 'a' for all, 'n' for none:")
+    click.echo("Enter site numbers to toggle (comma-separated), 'a' = enable all, 'n' = disable all:")
     click.echo()
     for i, site in enumerate(sites, 1):
         status = "[green]ON[/green]" if current_status[site] else "[dim]OFF[/dim]"
@@ -113,28 +116,34 @@ def _prompt_site_selection(
         return [], []
 
     if raw.lower() == "a":
-        selected = set(sites)
-    elif raw.lower() == "n":
-        selected = set()
-    else:
-        selected = set()
-        for part in raw.split(","):
-            part = part.strip()
-            if part.isdigit():
-                idx = int(part) - 1
-                if 0 <= idx < len(sites):
-                    selected.add(sites[idx])
+        # Enable all — only enable those currently OFF
+        to_enable = [s for s in sites if not current_status[s]]
+        return to_enable, []
 
-    to_enable = [s for s in selected if not current_status[s]]
-    to_disable = [s for s in sites if s not in selected and current_status[s]]
+    if raw.lower() == "n":
+        # Disable all — only disable those currently ON
+        to_disable = [s for s in sites if current_status[s]]
+        return [], to_disable
+
+    # Toggle selected sites: ON→OFF, OFF→ON
+    toggled = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            idx = int(part) - 1
+            if 0 <= idx < len(sites):
+                toggled.add(sites[idx])
+
+    to_enable = [s for s in toggled if not current_status[s]]
+    to_disable = [s for s in toggled if current_status[s]]
 
     return to_enable, to_disable
 
 
 def _is_cronjob_installed(script_path: str) -> bool:
-    """Check if the cloudflare refresh cronjob is installed."""
+    """Check if the cloudflare refresh cronjob is installed in root's crontab."""
     result = run(
-        ["bash", "-c", f"crontab -l 2>/dev/null | grep -q '{script_path}'"],
+        ["bash", "-c", f"sudo crontab -l 2>/dev/null | grep -q '{script_path}'"],
         check=False,
     )
     return result.ok
