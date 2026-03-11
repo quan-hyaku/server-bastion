@@ -11,6 +11,11 @@ from bastion.output import print_error, print_success, print_table
 from bastion.runner import run
 
 
+def _psql_cmd(cfg, sql: str) -> list[str]:
+    """Build a psql command that runs as the postgres OS user (peer auth)."""
+    return ["sudo", "-u", cfg.user, "psql", "-p", str(cfg.port), "-t", "-A", "-c", sql]
+
+
 @click.group("postgres")
 def postgres() -> None:
     """Manage PostgreSQL databases."""
@@ -22,7 +27,7 @@ def pg_status(ctx: click.Context) -> None:
     """Check if PostgreSQL is running."""
     cfg = get_config(ctx).postgres
     result = run(
-        ["pg_isready", "-h", cfg.host, "-p", str(cfg.port)],
+        ["pg_isready", "-p", str(cfg.port)],
         check=False,
     )
     if result.ok:
@@ -37,12 +42,13 @@ def pg_status(ctx: click.Context) -> None:
 def list_dbs(ctx: click.Context) -> None:
     """List all PostgreSQL databases."""
     cfg = get_config(ctx).postgres
-    result = run([
-        "psql", "-h", cfg.host, "-p", str(cfg.port), "-U", cfg.user,
-        "-t", "-A", "-c",
-        "SELECT datname, pg_size_pretty(pg_database_size(datname)) "
-        "FROM pg_database WHERE datistemplate = false;",
-    ])
+    result = run(
+        _psql_cmd(cfg,
+            "SELECT datname, pg_size_pretty(pg_database_size(datname)) "
+            "FROM pg_database WHERE datistemplate = false;"
+        ),
+        use_sudo=False,  # sudo is already in the command
+    )
     rows = [line.split("|") for line in result.stdout.splitlines() if "|" in line]
     print_table("Databases", ["Name", "Size"], rows)
 
@@ -54,11 +60,11 @@ def list_dbs(ctx: click.Context) -> None:
 def create_db(ctx: click.Context, dbname: str, owner: str | None) -> None:
     """Create a new PostgreSQL database."""
     cfg = get_config(ctx).postgres
-    cmd = ["createdb", "-h", cfg.host, "-p", str(cfg.port), "-U", cfg.user]
+    cmd = ["sudo", "-u", cfg.user, "createdb", "-p", str(cfg.port)]
     if owner:
         cmd.extend(["-O", owner])
     cmd.append(dbname)
-    run(cmd)
+    run(cmd, use_sudo=False)
     print_success(f"Database '{dbname}' created.")
 
 
@@ -71,7 +77,7 @@ def drop_db(ctx: click.Context, dbname: str, force: bool) -> None:
     if not force:
         click.confirm(f"Drop database '{dbname}'? This cannot be undone", abort=True)
     cfg = get_config(ctx).postgres
-    run(["dropdb", "-h", cfg.host, "-p", str(cfg.port), "-U", cfg.user, dbname])
+    run(["sudo", "-u", cfg.user, "dropdb", "-p", str(cfg.port), dbname], use_sudo=False)
     print_success(f"Database '{dbname}' dropped.")
 
 
@@ -87,7 +93,7 @@ def backup_db(ctx: click.Context, dbname: str, output: str | None) -> None:
         output = str(backup_dir / f"{dbname}.sql")
 
     run([
-        "pg_dump", "-h", cfg.host, "-p", str(cfg.port), "-U", cfg.user,
+        "sudo", "-u", cfg.user, "pg_dump", "-p", str(cfg.port),
         "-f", output, dbname,
-    ])
+    ], use_sudo=False)
     print_success(f"Database '{dbname}' backed up to {output}.")

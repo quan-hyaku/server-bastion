@@ -11,9 +11,21 @@ from bastion import __version__
 from bastion.commands import ALL_COMMANDS
 from bastion.config import load_config
 from bastion.output import print_error, print_success
+from bastion.runner import CommandError
 
 
-@click.group()
+class BastionCLI(click.Group):
+    """Custom Click group that catches CommandError and shows clean output."""
+
+    def invoke(self, ctx: click.Context) -> None:
+        try:
+            super().invoke(ctx)
+        except CommandError:
+            # Error message already printed by runner.run()
+            raise SystemExit(1)
+
+
+@click.group(cls=BastionCLI)
 @click.version_option(version=__version__, prog_name="bastion")
 @click.option("--dry-run", is_flag=True, help="Print commands without executing.")
 @click.option("--profile", type=click.Path(exists=True), help="Path to YAML server profile.")
