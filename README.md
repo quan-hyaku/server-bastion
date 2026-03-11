@@ -15,7 +15,7 @@ This installs all system dependencies (nginx, postgres, ufw, fail2ban), uv, and 
 **From a git repo:**
 
 ```bash
-sudo bash install.sh --repo https://github.com/you/bastion.git
+sudo bash install.sh --repo https://github.com/quan-hyaku/server-bastion.git
 ```
 
 **Development (local):**

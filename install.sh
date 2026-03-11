@@ -79,7 +79,7 @@ install_uv() {
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
     # Make uv available in current session
-    export PATH="/root/.cargo/bin:$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.local/bin:$PATH"
 
     if command -v uv &>/dev/null; then
         success "uv installed: $(uv --version)"
@@ -127,7 +127,7 @@ install_bastion() {
     info "Installing bastion..."
     cd "$INSTALL_DIR"
 
-    export PATH="/root/.cargo/bin:$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.local/bin:$PATH"
 
     uv sync --no-dev
     uv tool install "$INSTALL_DIR" --force
