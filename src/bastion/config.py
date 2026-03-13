@@ -25,7 +25,13 @@ class PostgresConfig:
     host: str = "localhost"
     port: int = 5432
     user: str = "postgres"
+    password: str = ""
     backup_dir: str = "/var/backups/postgresql"
+
+    @property
+    def is_local(self) -> bool:
+        """True when the target is a local socket connection (peer auth)."""
+        return self.host in ("localhost", "127.0.0.1", "::1", "")
 
 
 @dataclass

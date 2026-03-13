@@ -10,7 +10,7 @@ import yaml
 
 from bastion.config import get_config
 from bastion.output import print_error, print_panel, print_success, print_table, print_warning
-from bastion.runner import run
+from bastion.runner import read_file_sudo, run, write_file_sudo
 
 
 @click.group("tune")
@@ -87,8 +87,7 @@ def apply_preset(ctx: click.Context, preset: str, force: bool) -> None:
         cfg = get_config(ctx).tune
         lines = [f"{k} = {v}" for k, v in sysctl_values.items()]
         content = "\n".join(lines) + "\n"
-        sysctl_path = Path(cfg.sysctl_conf)
-        run(["tee", str(sysctl_path)], use_sudo=True)
+        write_file_sudo(cfg.sysctl_conf, content)
 
     print_success(f"Preset '{preset}' applied.")
 
@@ -110,12 +109,16 @@ def set_sysctl(key: str, value: str) -> None:
 def set_limits(ctx: click.Context, domain: str, item: str, value: str) -> None:
     """Set a single limits.conf entry (e.g., '* nofile 65535')."""
     cfg = get_config(ctx).tune
-    line = f"{domain} soft {item} {value}\n{domain} hard {item} {value}\n"
+    new_lines = f"{domain} soft {item} {value}\n{domain} hard {item} {value}\n"
     limits_path = Path(cfg.limits_conf)
 
-    # Append to limits file
-    run(
-        ["bash", "-c", f"echo '{line}' | sudo tee -a {limits_path}"],
-        use_sudo=False,  # sudo is inside the bash -c
-    )
+    # Read existing content and append safely via stdin
+    existing = ""
+    try:
+        existing = read_file_sudo(limits_path)
+    except Exception:
+        pass  # File may not exist yet
+
+    content = existing.rstrip("\n") + "\n" + new_lines if existing else new_lines
+    write_file_sudo(limits_path, content)
     print_success(f"Set {item} = {value} for {domain}")

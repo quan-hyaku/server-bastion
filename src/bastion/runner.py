@@ -5,6 +5,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
 import click
@@ -41,6 +42,7 @@ def run(
     check: bool = True,
     timeout: int = 30,
     ctx: click.Context | None = None,
+    env: dict[str, str] | None = None,
 ) -> RunResult:
     """Execute a shell command with dry-run, sudo, and logging support.
 
@@ -78,6 +80,7 @@ def run(
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
 
     result = RunResult(
@@ -92,3 +95,24 @@ def run(
         raise CommandError(result)
 
     return result
+
+
+def read_file_sudo(path: Path | str) -> str:
+    """Read a root-owned file via sudo cat."""
+    result = run(["sudo", "cat", str(path)], use_sudo=False, timeout=10)
+    return result.stdout
+
+
+def write_file_sudo(path: Path | str, content: str) -> None:
+    """Write content to a root-owned file via sudo tee.
+
+    Uses subprocess stdin to pass content safely — no shell injection possible.
+    """
+    cmd = ["sudo", "tee", str(path)]
+    subprocess.run(
+        cmd,
+        input=content,
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )

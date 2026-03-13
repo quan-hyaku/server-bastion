@@ -15,7 +15,7 @@ from bastion.output import (
     print_table,
     print_warning,
 )
-from bastion.runner import run
+from bastion.runner import run, write_file_sudo
 
 
 # ── Cloudflare helpers ──────────────────────────────────────────────
@@ -33,9 +33,7 @@ def _nginx_templates():
 
 def _deploy_file(src_content: str, dst: Path) -> None:
     """Write content to a system path via sudo tee."""
-    run(
-        ["bash", "-c", f"cat <<'SERVERCTL_EOF' | sudo tee {dst} > /dev/null\n{src_content}\nSERVERCTL_EOF"],
-    )
+    write_file_sudo(dst, src_content)
 
 
 def _site_has_include(site_path: Path, include_line: str) -> bool:
@@ -89,9 +87,9 @@ def _prompt_site_selection(
     include_line: str,
     label: str,
 ) -> tuple[list[str], list[str]]:
-    """Interactive checklist: let user toggle sites on/off.
+    """Interactive checklist: let user enable/disable sites.
 
-    Entering a site number flips its current state (ON→OFF, OFF→ON).
+    Use number to enable (e.g. '2'), prefix with - to disable (e.g. '-1').
     'a' enables all, 'n' disables all, empty keeps everything unchanged.
 
     Returns (to_enable, to_disable) lists of site names.
@@ -102,42 +100,51 @@ def _prompt_site_selection(
     }
 
     click.echo(f"\n{label}")
-    click.echo("Enter site numbers to toggle (comma-separated), 'a' = enable all, 'n' = disable all:")
+    click.echo("  Use number to enable, -number to disable (e.g. '2' or '-1')")
+    click.echo("  'a' = enable all, 'n' = disable all, Enter = no changes")
     click.echo()
     for i, site in enumerate(sites, 1):
         status = "[green]ON[/green]" if current_status[site] else "[dim]OFF[/dim]"
         console.print(f"  {i}) {site}  {status}")
     click.echo()
 
-    raw = click.prompt("Toggle sites", default="", show_default=False)
+    raw = click.prompt("Sites", default="", show_default=False)
     raw = raw.strip()
 
     if not raw:
         return [], []
 
     if raw.lower() == "a":
-        # Enable all — only enable those currently OFF
         to_enable = [s for s in sites if not current_status[s]]
         return to_enable, []
 
     if raw.lower() == "n":
-        # Disable all — only disable those currently ON
         to_disable = [s for s in sites if current_status[s]]
         return [], to_disable
 
-    # Toggle selected sites: ON→OFF, OFF→ON
-    toggled = set()
+    to_enable_set: set[str] = set()
+    to_disable_set: set[str] = set()
+
     for part in raw.split(","):
         part = part.strip()
-        if part.isdigit():
-            idx = int(part) - 1
+        if not part:
+            continue
+
+        disable = part.startswith("-")
+        num = part.lstrip("-+")
+
+        if num.isdigit():
+            idx = int(num) - 1
             if 0 <= idx < len(sites):
-                toggled.add(sites[idx])
+                site = sites[idx]
+                if disable:
+                    if current_status[site]:
+                        to_disable_set.add(site)
+                else:
+                    if not current_status[site]:
+                        to_enable_set.add(site)
 
-    to_enable = [s for s in toggled if not current_status[s]]
-    to_disable = [s for s in toggled if current_status[s]]
-
-    return to_enable, to_disable
+    return list(to_enable_set), list(to_disable_set)
 
 
 def _is_cronjob_installed(script_path: str) -> bool:

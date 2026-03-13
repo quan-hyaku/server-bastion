@@ -181,9 +181,10 @@ nginx:
   cloudflare_refresh_script: "/usr/local/bin/bastion-cloudflare-refresh"
 
 postgres:
-  host: "localhost"
+  host: "localhost"          # use remote IP/hostname for remote access
   port: 5432
   user: "postgres"
+  password: ""               # leave empty for local peer auth
   backup_dir: "/var/backups/postgresql"
 
 firewall:
@@ -217,18 +218,42 @@ setup_sudoers() {
     local sudoers_file="/etc/sudoers.d/bastion"
     local sudoers_content
     sudoers_content="# bastion — allow $current_user to run server admin commands without password
+# nginx
 $current_user ALL=(ALL) NOPASSWD: /usr/sbin/nginx, /usr/bin/nginx
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx, /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx
+# postgres (peer auth runs as postgres user)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart postgresql, /usr/bin/systemctl status postgresql
+$current_user ALL=(postgres) NOPASSWD: /usr/bin/psql, /usr/bin/pg_dump, /usr/bin/createdb, /usr/bin/dropdb, /usr/bin/pg_isready
+# firewall & fail2ban
 $current_user ALL=(ALL) NOPASSWD: /usr/sbin/ufw
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/fail2ban-client
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/ln, /usr/bin/rm
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/tee
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/chmod
+# nginx site management (symlinks in sites-enabled only)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/ln -sf /etc/nginx/sites-available/* /etc/nginx/sites-enabled/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm /etc/nginx/sites-enabled/*
+# file operations (restricted to config paths)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/nginx/*, /usr/bin/tee /etc/cron.d/bastion-*, /usr/bin/tee /etc/fail2ban/*, /usr/bin/tee /etc/sysctl.d/99-bastion.conf, /usr/bin/tee /etc/security/limits.d/99-bastion.conf, /usr/bin/tee /usr/local/maldetect/conf.maldet, /usr/bin/tee /etc/postgresql/*/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/nginx/*, /usr/bin/cat /etc/postgresql/*/*, /usr/bin/cat /etc/cron.d/bastion-*, /usr/bin/cat /usr/local/maldetect/conf.maldet
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm /etc/cron.d/bastion-*, /usr/bin/rm -f /etc/cron.d/bastion-*, /usr/bin/rm -f /etc/fail2ban/jail.d/*, /usr/bin/rm -f /etc/fail2ban/filter.d/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /etc/nginx/snippets
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/chmod 0644 /etc/cron.d/bastion-*, /usr/bin/chmod +x /usr/local/bin/bastion-*
+# sysctl
 $current_user ALL=(ALL) NOPASSWD: /usr/sbin/sysctl
+# crontab (for cloudflare refresh)
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/crontab
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/pg_dump, /usr/bin/psql, /usr/bin/createdb, /usr/bin/dropdb
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/bash"
+# package management (restricted to specific packages)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get update -qq
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y -qq clamav clamav-daemon
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get remove --purge -y -qq clamav clamav-daemon
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get autoremove -y -qq
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/dpkg -s clamav, /usr/bin/dpkg -s clamav-daemon
+# clamav & malware detect
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-daemon, /usr/bin/systemctl stop clamav-daemon, /usr/bin/systemctl enable clamav-daemon, /usr/bin/systemctl restart clamav-daemon, /usr/bin/systemctl is-active clamav-daemon
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl enable clamav-freshclam, /usr/bin/systemctl is-active clamav-freshclam
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/freshclam, /usr/bin/clamscan
+$current_user ALL=(ALL) NOPASSWD: /usr/local/sbin/maldet, /usr/local/sbin/lmd
+# LMD installation (one-time, needs broader access)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /tmp/maldetect-install
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /tmp/maldetect-install"
 
     echo "$sudoers_content" | sudo tee "$sudoers_file" > /dev/null
     sudo chmod 0440 "$sudoers_file"

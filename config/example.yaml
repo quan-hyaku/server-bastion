@@ -12,9 +12,10 @@ nginx:
   reload_cmd: "systemctl reload nginx"
 
 postgres:
-  host: "localhost"
+  host: "localhost"          # use remote IP/hostname for remote access
   port: 5432
   user: "postgres"
+  password: ""               # leave empty for local peer auth
   backup_dir: "/var/backups/postgresql"
 
 firewall:

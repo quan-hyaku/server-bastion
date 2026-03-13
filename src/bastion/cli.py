@@ -75,7 +75,7 @@ def self_update() -> None:
     # Reinstall via uv
     click.echo("Reinstalling...")
     result = subprocess.run(
-        ["uv", "tool", "install", str(INSTALL_DIR), "--force"],
+        ["uv", "tool", "install", str(INSTALL_DIR), "--force", "--reinstall"],
         capture_output=True,
         text=True,
     )

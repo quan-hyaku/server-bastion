@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from importlib import resources
 from pathlib import Path
 
@@ -9,7 +10,16 @@ import click
 
 from bastion.config import get_config
 from bastion.output import print_error, print_success, print_table, print_warning
-from bastion.runner import run
+from bastion.runner import run, write_file_sudo
+
+
+def _validate_ip(ip: str) -> None:
+    """Validate an IP address string."""
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        print_error(f"Invalid IP address: {ip}")
+        raise SystemExit(1)
 
 # All bundled jail names
 BUNDLED_JAILS = ["sshd", "nginx-script-scan", "nginx-http-auth", "nginx-botsearch"]
@@ -25,9 +35,7 @@ def _template_dir():
 
 def _deploy_file(src_content: str, dst: Path) -> None:
     """Write content to a system path via sudo tee."""
-    run(
-        ["bash", "-c", f"cat <<'SERVERCTL_EOF' | sudo tee {dst} > /dev/null\n{src_content}\nSERVERCTL_EOF"],
-    )
+    write_file_sudo(dst, src_content)
 
 
 @click.group("fail2ban")
@@ -54,6 +62,7 @@ def f2b_status(ctx: click.Context, jail: str | None) -> None:
 @click.pass_context
 def ban_ip(ctx: click.Context, ip: str, jail: str) -> None:
     """Ban an IP address in a jail."""
+    _validate_ip(ip)
     cfg = get_config(ctx).fail2ban
     run([cfg.client_cmd, "set", jail, "banip", ip], use_sudo=True)
     print_success(f"Banned {ip} in jail '{jail}'.")
@@ -65,6 +74,7 @@ def ban_ip(ctx: click.Context, ip: str, jail: str) -> None:
 @click.pass_context
 def unban_ip(ctx: click.Context, ip: str, jail: str) -> None:
     """Unban an IP address from a jail."""
+    _validate_ip(ip)
     cfg = get_config(ctx).fail2ban
     run([cfg.client_cmd, "set", jail, "unbanip", ip], use_sudo=True)
     print_success(f"Unbanned {ip} from jail '{jail}'.")
