@@ -235,6 +235,7 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/nginx/*, /usr/bin/tee /etc/c
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/nginx/*, /usr/bin/cat /etc/postgresql/*/*, /usr/bin/cat /etc/cron.d/bastion-*, /usr/bin/cat /usr/local/maldetect/conf.maldet
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm /etc/cron.d/bastion-*, /usr/bin/rm -f /etc/cron.d/bastion-*, /usr/bin/rm -f /etc/fail2ban/jail.d/*, /usr/bin/rm -f /etc/fail2ban/filter.d/*
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /etc/nginx/snippets
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /var/log/bastion
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/chmod 0644 /etc/cron.d/bastion-*, /usr/bin/chmod +x /usr/local/bin/bastion-*
 # sysctl
 $current_user ALL=(ALL) NOPASSWD: /usr/sbin/sysctl
