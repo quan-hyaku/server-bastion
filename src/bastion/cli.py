@@ -72,6 +72,11 @@ def self_update() -> None:
 
     click.echo(result.stdout.strip())
 
+    # Clean __pycache__ to prevent stale bytecode
+    for pycache in INSTALL_DIR.rglob("__pycache__"):
+        import shutil
+        shutil.rmtree(pycache, ignore_errors=True)
+
     # Reinstall via uv
     click.echo("Reinstalling...")
     result = subprocess.run(
