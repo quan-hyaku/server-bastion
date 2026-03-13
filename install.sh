@@ -251,9 +251,18 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-daemon, /usr/b
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl enable clamav-freshclam, /usr/bin/systemctl is-active clamav-freshclam
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/freshclam, /usr/bin/clamscan
 $current_user ALL=(ALL) NOPASSWD: /usr/local/sbin/maldet, /usr/local/sbin/lmd
-# LMD installation (one-time, needs broader access)
+# LMD installation (one-time setup)
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /tmp/maldetect-install
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /tmp/maldetect-install"
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /tmp/maldetect-install
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/curl -sSL -o /tmp/maldetect-install/maldetect.tar.gz *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/tar xzf /tmp/maldetect-install/maldetect.tar.gz -C /tmp/maldetect-install --strip-components=1
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/maldetect-install/install.sh
+# LMD uninstall paths
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/maldetect
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/sbin/maldet
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/sbin/lmd
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /etc/cron.daily/maldet
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /etc/cron.d/maldet"
 
     echo "$sudoers_content" | sudo tee "$sudoers_file" > /dev/null
     sudo chmod 0440 "$sudoers_file"
