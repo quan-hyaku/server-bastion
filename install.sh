@@ -253,6 +253,10 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-daemon, /usr/b
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl enable clamav-freshclam, /usr/bin/systemctl is-active clamav-freshclam
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/freshclam, /usr/bin/clamscan
 $current_user ALL=(ALL) NOPASSWD: /usr/local/sbin/maldet, /usr/local/sbin/lmd
+# resource limiting for scans
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run --scope --quiet --property=CPUQuota=*% nice -n 19 ionice -c3 /usr/local/sbin/maldet *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run --scope --quiet --property=CPUQuota=*% nice -n 19 ionice -c3 /usr/bin/clamscan *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/nice, /usr/bin/ionice
 # LMD installation (one-time setup)
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /tmp/maldetect-install
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /tmp/maldetect-install
