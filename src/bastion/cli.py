@@ -23,6 +23,9 @@ class BastionCLI(click.Group):
         except CommandError:
             # Error message already printed by runner.run()
             raise SystemExit(1)
+        except subprocess.TimeoutExpired as exc:
+            print_error(f"Command timed out: {exc.cmd}")
+            raise SystemExit(1)
 
 
 @click.group(cls=BastionCLI)
