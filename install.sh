@@ -250,7 +250,16 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get autoremove -y -qq
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/dpkg -s clamav, /usr/bin/dpkg -s clamav-daemon
 # audit & health checks
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/openssl x509 -enddate -noout -in *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/openssl x509 -subject -noout -in *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/openssl x509 -issuer -noout -in *
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/dpkg -l unattended-upgrades
+# ssl certificate management
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /etc/ssl/bastion/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/ssl/bastion/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/ssl/bastion/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/chmod 600 /etc/ssl/bastion/*, /usr/bin/chmod 644 /etc/ssl/bastion/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /etc/ssl/bastion/*
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/certbot
 # clamav & malware detect
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-daemon, /usr/bin/systemctl stop clamav-daemon, /usr/bin/systemctl enable clamav-daemon, /usr/bin/systemctl restart clamav-daemon, /usr/bin/systemctl is-active clamav-daemon
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl enable clamav-freshclam, /usr/bin/systemctl is-active clamav-freshclam
