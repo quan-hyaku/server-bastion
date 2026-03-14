@@ -69,7 +69,7 @@ def _get_token(token: str | None) -> str:
         return saved
     print_error(
         "No Cloudflare API token provided.\n"
-        "  Pass --token <TOKEN> or run: bastion ssl token --set <TOKEN>\n"
+        "  Pass --token <TOKEN> or run: bastion ssl cloudflare-token --set <TOKEN>\n"
         "  Create one at: https://dash.cloudflare.com/profile/api-tokens\n"
         "  Required permissions: Zone.SSL and Certificates, Zone.Zone (read)"
     )
@@ -203,7 +203,7 @@ def ssl() -> None:
 # ── Token ───────────────────────────────────────────────────────────
 
 
-@ssl.command("token")
+@ssl.command("cloudflare-token")
 @click.option("--set", "set_token", default=None, help="Save Cloudflare API token.")
 @click.option("--show", is_flag=True, help="Show saved token (masked).")
 @click.option("--remove", is_flag=True, help="Remove saved token.")
@@ -212,11 +212,11 @@ def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
 
     \b
     Save token:
-      bastion ssl token --set <TOKEN>
+      bastion ssl cloudflare-token --set <TOKEN>
 
     \b
     Show saved token:
-      bastion ssl token --show
+      bastion ssl cloudflare-token --show
 
     \b
     Create a token at:
@@ -234,7 +234,7 @@ def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
             click.echo(f"Token: {masked}")
             click.echo(f"File:  {TOKEN_FILE}")
         else:
-            print_warning("No token saved. Run: bastion ssl token --set <TOKEN>")
+            print_warning("No token saved. Run: bastion ssl cloudflare-token --set <TOKEN>")
     elif remove:
         if TOKEN_FILE.exists():
             TOKEN_FILE.unlink()
@@ -246,13 +246,13 @@ def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
         if _load_token():
             print_success(f"Token configured at {TOKEN_FILE}")
         else:
-            print_warning("No token saved. Run: bastion ssl token --set <TOKEN>")
+            print_warning("No token saved. Run: bastion ssl cloudflare-token --set <TOKEN>")
 
 
 # ── Origin Certificate ──────────────────────────────────────────────
 
 
-@ssl.command("origin")
+@ssl.command("cloudflare-origin")
 @click.argument("domain")
 @click.option("--wildcard/--no-wildcard", default=True, show_default=True,
               help="Include wildcard (*.domain.com) in the certificate.")
@@ -262,7 +262,7 @@ def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
 @click.option("--token", default=None, help="Cloudflare API token.", envvar="CF_API_TOKEN")
 @click.option("--install/--no-install", default=True, show_default=True,
               help="Install the cert to nginx after creating it.")
-def origin_cert(
+def cloudflare_origin_cert(
     domain: str,
     wildcard: bool,
     validity: str,
@@ -277,15 +277,15 @@ def origin_cert(
 
     \b
     Basic usage (15-year cert with wildcard):
-      bastion ssl origin example.com
+      bastion ssl cloudflare-origin example.com
 
     \b
     Without wildcard:
-      bastion ssl origin example.com --no-wildcard
+      bastion ssl cloudflare-origin example.com --no-wildcard
 
     \b
     Short-lived cert:
-      bastion ssl origin example.com --validity 365
+      bastion ssl cloudflare-origin example.com --validity 365
     """
     _validate_domain(domain)
     token = _get_token(token)
@@ -365,7 +365,7 @@ def origin_cert(
 # ── Let's Encrypt DNS-01 ────────────────────────────────────────────
 
 
-@ssl.command("certbot")
+@ssl.command("certbot-dns")
 @click.argument("domain")
 @click.option("--wildcard/--no-wildcard", default=False, show_default=True,
               help="Request a wildcard certificate (*.domain.com).")
@@ -389,11 +389,11 @@ def certbot_dns(
 
     \b
     Basic usage:
-      bastion ssl certbot example.com --email admin@example.com
+      bastion ssl certbot-dns example.com --email admin@example.com
 
     \b
     Wildcard cert:
-      bastion ssl certbot example.com --wildcard --email admin@example.com
+      bastion ssl certbot-dns example.com --wildcard --email admin@example.com
     """
     _validate_domain(domain)
     token = _get_token(token)
@@ -661,16 +661,16 @@ def _add_cert_row(
 # ── Revoke / Remove ────────────────────────────────────────────────
 
 
-@ssl.command("revoke")
+@ssl.command("cloudflare-revoke")
 @click.argument("domain")
 @click.option("--token", default=None, help="Cloudflare API token.", envvar="CF_API_TOKEN")
 @click.option("--delete/--no-delete", default=False, help="Delete cert files after revoking.")
 def revoke_cert(domain: str, token: str | None, delete: bool) -> None:
-    """Revoke a Cloudflare Origin certificate.
+    """Revoke a Cloudflare Origin or Let's Encrypt certificate.
 
     \b
     Revoke and delete:
-      bastion ssl revoke example.com --delete
+      bastion ssl cloudflare-revoke example.com --delete
     """
     _validate_domain(domain)
 
@@ -720,7 +720,7 @@ def revoke_cert(domain: str, token: str | None, delete: bool) -> None:
 # ── Renew ───────────────────────────────────────────────────────────
 
 
-@ssl.command("renew")
+@ssl.command("certbot-renew")
 def renew_certs() -> None:
     """Renew all Let's Encrypt certificates.
 
