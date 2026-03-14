@@ -248,6 +248,9 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y -qq clamav clamav-
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get remove --purge -y -qq clamav clamav-daemon
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/apt-get autoremove -y -qq
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/dpkg -s clamav, /usr/bin/dpkg -s clamav-daemon
+# audit & health checks
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/openssl x509 -enddate -noout -in *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/dpkg -l unattended-upgrades
 # clamav & malware detect
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-daemon, /usr/bin/systemctl stop clamav-daemon, /usr/bin/systemctl enable clamav-daemon, /usr/bin/systemctl restart clamav-daemon, /usr/bin/systemctl is-active clamav-daemon
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl enable clamav-freshclam, /usr/bin/systemctl is-active clamav-freshclam
