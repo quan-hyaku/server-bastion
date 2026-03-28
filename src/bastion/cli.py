@@ -49,8 +49,17 @@ INSTALL_DIR = Path.home() / ".local" / "share" / "bastion"
 
 
 @cli.command("self-update")
-def self_update() -> None:
+@click.pass_context
+def self_update(ctx: click.Context) -> None:
     """Pull latest changes and reinstall bastion."""
+    dry_run = ctx.obj.get("dry_run", False) if ctx.obj else False
+
+    if dry_run:
+        from bastion.output import print_command
+        print_command(f"git -C {INSTALL_DIR} pull", dry_run=True)
+        print_command(f"uv tool install {INSTALL_DIR} --force --reinstall", dry_run=True)
+        return
+
     if not (INSTALL_DIR / ".git").is_dir():
         print_error(f"Source directory is not a git repo: {INSTALL_DIR}")
         print_error("Self-update requires installation via --repo.")

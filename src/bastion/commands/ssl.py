@@ -429,8 +429,13 @@ def certbot_dns(
     # Write cloudflare credentials file (temp, restricted)
     creds_file = Path("/tmp/bastion-cf-creds.ini")
     creds_content = f"dns_cloudflare_api_token = {token}\n"
-    creds_file.write_text(creds_content)
-    creds_file.chmod(0o600)
+
+    ctx = click.get_current_context(silent=True)
+    dry_run = ctx.obj.get("dry_run", False) if (ctx and ctx.obj) else False
+
+    if not dry_run:
+        creds_file.write_text(creds_content)
+        creds_file.chmod(0o600)
 
     try:
         # Build certbot command
@@ -468,8 +473,7 @@ def certbot_dns(
         console.print()
 
     finally:
-        # Always clean up credentials
-        if creds_file.exists():
+        if not dry_run and creds_file.exists():
             creds_file.unlink()
 
 

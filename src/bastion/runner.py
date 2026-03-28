@@ -43,6 +43,7 @@ def run(
     timeout: int = 30,
     ctx: click.Context | None = None,
     env: dict[str, str] | None = None,
+    input: str | None = None,
 ) -> RunResult:
     """Execute a shell command with dry-run, sudo, and logging support.
 
@@ -81,6 +82,7 @@ def run(
         text=True,
         timeout=timeout,
         env=env,
+        input=input,
     )
 
     result = RunResult(
@@ -107,12 +109,6 @@ def write_file_sudo(path: Path | str, content: str) -> None:
     """Write content to a root-owned file via sudo tee.
 
     Uses subprocess stdin to pass content safely — no shell injection possible.
+    Respects --dry-run and raises CommandError on failure.
     """
-    cmd = ["sudo", "tee", str(path)]
-    subprocess.run(
-        cmd,
-        input=content,
-        text=True,
-        capture_output=True,
-        timeout=10,
-    )
+    run(["tee", str(path)], use_sudo=True, input=content, timeout=10)

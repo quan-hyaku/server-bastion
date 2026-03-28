@@ -51,8 +51,9 @@ class TestFail2banCommands:
 
 
 class TestFail2banSetup:
+    @patch("bastion.commands.fail2ban.write_file_sudo")
     @patch("bastion.commands.fail2ban.run")
-    def test_setup_single_jail(self, mock_run: MagicMock):
+    def test_setup_single_jail(self, mock_run: MagicMock, mock_write: MagicMock):
         mock_run.return_value = RunResult(
             command="mocked", returncode=0, stdout="", stderr=""
         )
@@ -62,8 +63,9 @@ class TestFail2banSetup:
         assert "Jail deployed" in result.output
         assert "reloaded" in result.output.lower()
 
+    @patch("bastion.commands.fail2ban.write_file_sudo")
     @patch("bastion.commands.fail2ban.run")
-    def test_setup_all(self, mock_run: MagicMock):
+    def test_setup_all(self, mock_run: MagicMock, mock_write: MagicMock):
         mock_run.return_value = RunResult(
             command="mocked", returncode=0, stdout="", stderr=""
         )
@@ -72,8 +74,9 @@ class TestFail2banSetup:
         assert result.exit_code == 0
         assert f"{len(BUNDLED_JAILS)} jail(s) deployed" in result.output
 
+    @patch("bastion.commands.fail2ban.write_file_sudo")
     @patch("bastion.commands.fail2ban.run")
-    def test_setup_custom_filter_jail_deploys_filter(self, mock_run: MagicMock):
+    def test_setup_custom_filter_jail_deploys_filter(self, mock_run: MagicMock, mock_write: MagicMock):
         mock_run.return_value = RunResult(
             command="mocked", returncode=0, stdout="", stderr=""
         )
@@ -83,8 +86,9 @@ class TestFail2banSetup:
         assert "Filter deployed" in result.output
         assert "Jail deployed" in result.output
 
+    @patch("bastion.commands.fail2ban.write_file_sudo")
     @patch("bastion.commands.fail2ban.run")
-    def test_setup_builtin_jail_no_filter(self, mock_run: MagicMock):
+    def test_setup_builtin_jail_no_filter(self, mock_run: MagicMock, mock_write: MagicMock):
         """sshd uses a built-in filter, no custom filter should be deployed."""
         mock_run.return_value = RunResult(
             command="mocked", returncode=0, stdout="", stderr=""

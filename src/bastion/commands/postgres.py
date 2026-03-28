@@ -223,6 +223,9 @@ def list_dbs(ctx: click.Context) -> None:
 @click.pass_context
 def create_db(ctx: click.Context, dbname: str, owner: str | None) -> None:
     """Create a new PostgreSQL database."""
+    _validate_pg_identifier(dbname, "database name")
+    if owner:
+        _validate_pg_identifier(owner, "owner")
     cfg = get_config(ctx).postgres
     cmd = _pg_base(cfg, "createdb")
     if owner:
@@ -238,6 +241,7 @@ def create_db(ctx: click.Context, dbname: str, owner: str | None) -> None:
 @click.pass_context
 def drop_db(ctx: click.Context, dbname: str, force: bool) -> None:
     """Drop a PostgreSQL database."""
+    _validate_pg_identifier(dbname, "database name")
     if not force:
         click.confirm(f"Drop database '{dbname}'? This cannot be undone", abort=True)
     cfg = get_config(ctx).postgres
@@ -252,6 +256,7 @@ def drop_db(ctx: click.Context, dbname: str, force: bool) -> None:
 @click.pass_context
 def backup_db(ctx: click.Context, dbname: str, output: str | None) -> None:
     """Backup a PostgreSQL database using pg_dump."""
+    _validate_pg_identifier(dbname, "database name")
     cfg = get_config(ctx).postgres
     if output is None:
         backup_dir = Path(cfg.backup_dir)
