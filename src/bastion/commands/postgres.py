@@ -168,7 +168,8 @@ def _remove_hba_rules(hba_path: Path, cidr: str | None = None) -> int:
 
     for line in lines:
         if BASTION_HBA_MARKER in line:
-            if cidr is None or cidr in line:
+            fields = line.split()  # host <db> <user> <cidr> <method> # marker
+            if cidr is None or (len(fields) > 3 and fields[3] == cidr):
                 removed += 1
                 continue
         new_lines.append(line)

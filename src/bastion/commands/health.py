@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from bastion.output import console, print_error, print_success, print_table, print_warning
+from bastion.output import console, plain, print_data, print_error, print_success, print_table, print_warning
 from bastion.runner import run
 
 
@@ -387,6 +387,20 @@ def health_status(ctx: click.Context) -> None:
     console.print(f"  Pending updates:    {total_updates}")
     console.print(f"  Security updates:   {security_display}")
     console.print()
+
+    def _num(s: str) -> int | str:
+        return int(s) if s.isdigit() else s
+
+    print_data("system", {
+        "host": hostname,
+        "uptime": uptime_display,
+        "cpus": cpus,
+        "load": plain(load_display),
+        "failed_ssh_logins_24h": _num(plain(failed)),
+        "banned_ips": _num(banned),
+        "pending_updates": _num(total_updates),
+        "security_updates": _num(security_updates),
+    })
 
 
 @health.command("disk")

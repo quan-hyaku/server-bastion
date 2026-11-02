@@ -105,10 +105,17 @@ def read_file_sudo(path: Path | str) -> str:
     return result.stdout
 
 
-def write_file_sudo(path: Path | str, content: str) -> None:
+def write_file_sudo(path: Path | str, content: str, *, mode: int | None = None) -> None:
     """Write content to a root-owned file via sudo tee.
 
     Uses subprocess stdin to pass content safely — no shell injection possible.
     Respects --dry-run and raises CommandError on failure.
+
+    With ``mode``, the file is created empty and chmod'ed *before* the content
+    is written, so secrets (private keys) never sit on disk at the 0644 umask
+    default, even briefly.
     """
+    if mode is not None:
+        run(["tee", str(path)], use_sudo=True, input="", timeout=10)
+        run(["chmod", f"{mode:o}", str(path)], use_sudo=True, timeout=10)
     run(["tee", str(path)], use_sudo=True, input=content, timeout=10)

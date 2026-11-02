@@ -73,22 +73,27 @@ def load_config(path: str | Path) -> ServerProfile:
 
     with filepath.open() as f:
         raw: dict[str, Any] = yaml.safe_load(f) or {}
+    if not isinstance(raw, dict):
+        raise click.ClickException(f"Invalid config {filepath}: expected a YAML mapping")
 
     profile = ServerProfile(
         name=raw.get("name", filepath.stem),
         description=raw.get("description", ""),
     )
 
-    if "nginx" in raw:
-        profile.nginx = NginxConfig(**raw["nginx"])
-    if "postgres" in raw:
-        profile.postgres = PostgresConfig(**raw["postgres"])
-    if "firewall" in raw:
-        profile.firewall = FirewallConfig(**raw["firewall"])
-    if "fail2ban" in raw:
-        profile.fail2ban = Fail2banConfig(**raw["fail2ban"])
-    if "tune" in raw:
-        profile.tune = TuneConfig(**raw["tune"])
+    try:
+        if "nginx" in raw:
+            profile.nginx = NginxConfig(**raw["nginx"])
+        if "postgres" in raw:
+            profile.postgres = PostgresConfig(**raw["postgres"])
+        if "firewall" in raw:
+            profile.firewall = FirewallConfig(**raw["firewall"])
+        if "fail2ban" in raw:
+            profile.fail2ban = Fail2banConfig(**raw["fail2ban"])
+        if "tune" in raw:
+            profile.tune = TuneConfig(**raw["tune"])
+    except TypeError as exc:  # unknown key or non-mapping section
+        raise click.ClickException(f"Invalid config {filepath}: {exc}") from exc
 
     return profile
 

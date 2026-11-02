@@ -71,6 +71,13 @@ def _remove_include_from_site(site_path: Path, include_line: str) -> None:
     _deploy_file("".join(new_lines), site_path)
 
 
+def _validate_site_name(site: str) -> None:
+    """A site is a bare filename in sites-available — never a path."""
+    if not site or "/" in site or site in (".", ".."):
+        print_error(f"Invalid site name: {site!r}")
+        raise SystemExit(1)
+
+
 def _get_site_names(sites_available: Path) -> list[str]:
     """Get sorted list of site config filenames."""
     if not sites_available.exists():
@@ -147,32 +154,39 @@ def _prompt_site_selection(
     return list(to_enable_set), list(to_disable_set)
 
 
+def _root_crontab() -> list[str]:
+    """Return root's crontab lines (empty when root has no crontab)."""
+    result = run(["sudo", "crontab", "-l"], check=False)
+    return result.stdout.splitlines() if result.ok else []
+
+
+def _crontab_without(script_path: str) -> list[str]:
+    """Root's crontab minus any bastion cloudflare-refresh entries."""
+    return [
+        line for line in _root_crontab()
+        if script_path not in line and line.strip() != CRON_COMMENT
+    ]
+
+
+def _write_root_crontab(lines: list[str]) -> None:
+    run(["crontab", "-"], use_sudo=True, input="\n".join([*lines, ""]))
+
+
 def _is_cronjob_installed(script_path: str) -> bool:
     """Check if the cloudflare refresh cronjob is installed in root's crontab."""
-    result = run(
-        ["bash", "-c", f"sudo crontab -l 2>/dev/null | grep -q '{script_path}'"],
-        check=False,
-    )
-    return result.ok
+    return any(script_path in line for line in _root_crontab())
 
 
 def _install_cronjob(script_path: str) -> None:
     """Add the cloudflare refresh script to root's crontab."""
-    cron_line = f"{CRON_SCHEDULE} {script_path}"
-    run(
-        ["bash", "-c",
-         f"(sudo crontab -l 2>/dev/null | grep -v '{script_path}'; "
-         f"echo '{CRON_COMMENT}'; echo '{cron_line}') | sudo crontab -"],
+    _write_root_crontab(
+        [*_crontab_without(script_path), CRON_COMMENT, f"{CRON_SCHEDULE} {script_path}"]
     )
 
 
 def _remove_cronjob(script_path: str) -> None:
     """Remove the cloudflare refresh script from root's crontab."""
-    run(
-        ["bash", "-c",
-         f"sudo crontab -l 2>/dev/null | grep -v '{script_path}' | grep -v '{CRON_COMMENT}' | sudo crontab -"],
-        check=False,
-    )
+    _write_root_crontab(_crontab_without(script_path))
 
 
 def _any_site_has_cloudflare_allow(sites_dir: Path, sites: list[str]) -> bool:
@@ -214,6 +228,7 @@ def list_sites(ctx: click.Context) -> None:
 @click.pass_context
 def enable_site(ctx: click.Context, site: str) -> None:
     """Enable an nginx site by creating a symlink."""
+    _validate_site_name(site)
     cfg = get_config(ctx).nginx
     source = Path(cfg.sites_available) / site
     target = Path(cfg.sites_enabled) / site
@@ -233,6 +248,7 @@ def enable_site(ctx: click.Context, site: str) -> None:
 @click.pass_context
 def disable_site(ctx: click.Context, site: str) -> None:
     """Disable an nginx site by removing its symlink."""
+    _validate_site_name(site)
     cfg = get_config(ctx).nginx
     target = Path(cfg.sites_enabled) / site
 
