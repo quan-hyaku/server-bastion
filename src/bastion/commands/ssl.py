@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import subprocess
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -47,10 +51,12 @@ TOKEN_FILE = Path.home() / ".config" / "bastion" / "cloudflare-token"
 
 
 def _save_token(token: str) -> None:
-    """Save Cloudflare API token to config."""
+    """Save Cloudflare API token to config, created 0600 from the first byte."""
     TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOKEN_FILE.write_text(token)
-    TOKEN_FILE.chmod(0o600)
+    fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(token)
+    TOKEN_FILE.chmod(0o600)  # also tighten a file created by an older version
 
 
 def _load_token() -> str | None:
@@ -85,25 +91,30 @@ def _cf_request(
     token: str,
     data: dict | None = None,
 ) -> dict:
-    """Make a Cloudflare API request using curl."""
-    url = f"{CF_API_BASE}{endpoint}"
-    cmd = [
-        "curl", "-s", "-X", method, url,
-        "-H", f"Authorization: Bearer {token}",
-        "-H", "Content-Type: application/json",
-    ]
-    if data:
-        cmd.extend(["-d", json.dumps(data)])
+    """Make a Cloudflare API request.
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if proc.returncode != 0:
-        print_error(f"API request failed: {proc.stderr}")
+    stdlib urllib rather than curl: a curl argv puts the bearer token in
+    /proc/*/cmdline, which every local user can read.
+    """
+    req = urllib.request.Request(
+        f"{CF_API_BASE}{endpoint}",
+        method=method,
+        data=json.dumps(data).encode() if data else None,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read()  # Cloudflare returns its JSON error envelope on 4xx
+    except OSError as exc:  # URLError, timeouts, DNS
+        print_error(f"API request failed: {exc}")
         raise SystemExit(1)
 
     try:
-        result = json.loads(proc.stdout)
+        result = json.loads(body)
     except json.JSONDecodeError:
-        print_error(f"Invalid API response: {proc.stdout[:200]}")
+        print_error(f"Invalid API response: {body[:200]!r}")
         raise SystemExit(1)
 
     if not result.get("success", False):
@@ -124,7 +135,7 @@ def _get_zone_id(domain: str, token: str) -> str:
     # Try from most specific to root
     for i in range(len(parts) - 1):
         zone_name = ".".join(parts[i:])
-        result = _cf_request("GET", f"/zones?name={zone_name}", token)
+        result = _cf_request("GET", "/zones?" + urllib.parse.urlencode({"name": zone_name}), token)
         zones = result.get("result", [])
         if zones:
             return zones[0]["id"]
@@ -204,7 +215,9 @@ def ssl() -> None:
 
 
 @ssl.command("cloudflare-token")
-@click.option("--set", "set_token", default=None, help="Save Cloudflare API token.")
+@click.option("--set", "set_token", is_flag=False, flag_value="-", default=None,
+              help="Save Cloudflare API token. Omit the value (or pass '-') to be prompted "
+                   "without echo, keeping the token out of shell history.")
 @click.option("--show", is_flag=True, help="Show saved token (masked).")
 @click.option("--remove", is_flag=True, help="Remove saved token.")
 def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
@@ -224,6 +237,8 @@ def manage_token(set_token: str | None, show: bool, remove: bool) -> None:
       Required permissions: Zone.SSL and Certificates, Zone.Zone (read)
     """
     if set_token:
+        if set_token == "-":
+            set_token = click.prompt("Cloudflare API token", hide_input=True)
         _validate_api_token(set_token)
         _save_token(set_token)
         print_success(f"Token saved to {TOKEN_FILE}")
@@ -338,9 +353,7 @@ def cloudflare_origin_cert(
     cert_dir = _cert_dir(domain)
     run(["mkdir", "-p", str(cert_dir)], use_sudo=True)
     write_file_sudo(cert_path, certificate)
-    write_file_sudo(key_path, private_key)
-    # Restrict key permissions
-    run(["chmod", "600", str(key_path)], use_sudo=True)
+    write_file_sudo(key_path, private_key, mode=0o600)  # never on disk as 0644
     run(["chmod", "644", str(cert_path)], use_sudo=True)
 
     print_success(f"Certificate saved to {cert_path}")
@@ -426,11 +439,18 @@ def certbot_dns(
         console.print(f"  Wildcard:  *.{domain}")
     console.print()
 
-    # Write cloudflare credentials file (temp, restricted)
-    creds_file = Path("/tmp/bastion-cf-creds.ini")
-    creds_content = f"dns_cloudflare_api_token = {token}\n"
-    creds_file.write_text(creds_content)
-    creds_file.chmod(0o600)
+    ctx = click.get_current_context(silent=True)
+    dry_run = ctx.obj.get("dry_run", False) if (ctx and ctx.obj) else False
+
+    # mkstemp: unpredictable name, created 0600. A fixed /tmp path could be
+    # pre-created or symlinked by another local user.
+    if dry_run:
+        creds_file = Path("/tmp/bastion-cf-XXXXXX.ini")  # display only
+    else:
+        fd, creds_name = tempfile.mkstemp(prefix="bastion-cf-", suffix=".ini")
+        with os.fdopen(fd, "w") as f:
+            f.write(f"dns_cloudflare_api_token = {token}\n")
+        creds_file = Path(creds_name)
 
     try:
         # Build certbot command
@@ -468,8 +488,7 @@ def certbot_dns(
         console.print()
 
     finally:
-        # Always clean up credentials
-        if creds_file.exists():
+        if not dry_run and creds_file.exists():
             creds_file.unlink()
 
 
@@ -552,10 +571,9 @@ def _find_nginx_config(domain: str) -> Path | None:
     if not sites_available.exists():
         return None
 
-    # Search for server_name matching the domain
+    # Search for server_name matching the domain (grep exits 1 on no match)
     result = run(
-        ["bash", "-c",
-         f"grep -rl 'server_name.*{re.escape(domain)}' /etc/nginx/sites-available/ 2>/dev/null"],
+        ["grep", "-rl", f"server_name.*{re.escape(domain)}", str(sites_available)],
         check=False, timeout=10,
     )
     if result.ok and result.stdout.strip():

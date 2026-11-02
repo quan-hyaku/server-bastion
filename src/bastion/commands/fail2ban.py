@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from importlib import resources
 from pathlib import Path
 
@@ -20,6 +21,13 @@ def _validate_ip(ip: str) -> None:
     except ValueError:
         print_error(f"Invalid IP address: {ip}")
         raise SystemExit(1)
+
+def _validate_jail_name(name: str) -> None:
+    """Jail names are used as file names and client args — keep them plain."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        print_error(f"Invalid jail name: {name!r}")
+        raise SystemExit(1)
+
 
 # All bundled jail names
 BUNDLED_JAILS = ["sshd", "nginx-script-scan", "nginx-http-auth", "nginx-botsearch"]
@@ -51,6 +59,7 @@ def f2b_status(ctx: click.Context, jail: str | None) -> None:
     cfg = get_config(ctx).fail2ban
     cmd = [cfg.client_cmd, "status"]
     if jail:
+        _validate_jail_name(jail)
         cmd.append(jail)
     result = run(cmd, use_sudo=True, check=False)
     click.echo(result.stdout)
@@ -63,6 +72,7 @@ def f2b_status(ctx: click.Context, jail: str | None) -> None:
 def ban_ip(ctx: click.Context, ip: str, jail: str) -> None:
     """Ban an IP address in a jail."""
     _validate_ip(ip)
+    _validate_jail_name(jail)
     cfg = get_config(ctx).fail2ban
     run([cfg.client_cmd, "set", jail, "banip", ip], use_sudo=True)
     print_success(f"Banned {ip} in jail '{jail}'.")
@@ -75,6 +85,7 @@ def ban_ip(ctx: click.Context, ip: str, jail: str) -> None:
 def unban_ip(ctx: click.Context, ip: str, jail: str) -> None:
     """Unban an IP address from a jail."""
     _validate_ip(ip)
+    _validate_jail_name(jail)
     cfg = get_config(ctx).fail2ban
     run([cfg.client_cmd, "set", jail, "unbanip", ip], use_sudo=True)
     print_success(f"Unbanned {ip} from jail '{jail}'.")
@@ -155,6 +166,7 @@ def setup_jails(ctx: click.Context, jails: tuple[str, ...], install_all: bool) -
 @click.pass_context
 def remove_jail(ctx: click.Context, name: str, force: bool) -> None:
     """Remove a deployed jail config (and its custom filter if any)."""
+    _validate_jail_name(name)
     cfg = get_config(ctx).fail2ban
 
     jail_path = Path(cfg.jail_dir) / f"{name}.conf"

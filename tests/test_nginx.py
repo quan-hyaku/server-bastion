@@ -176,10 +176,12 @@ class TestCloudflareCommand:
         assert result.exit_code == 1
 
     @patch("bastion.commands.nginx._is_cronjob_installed", return_value=False)
+    @patch("bastion.commands.nginx.write_file_sudo")
     @patch("bastion.commands.nginx.run")
     def test_cloudflare_full_flow(
         self,
         mock_run: MagicMock,
+        mock_write: MagicMock,
         mock_cron_check: MagicMock,
         tmp_path: Path,
     ):

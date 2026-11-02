@@ -16,10 +16,24 @@ CF_IPV6_URL="https://www.cloudflare.com/ips-v6/"
 IPV4=$(curl -sf "$CF_IPV4_URL") || { echo "Failed to fetch IPv4 ranges"; exit 1; }
 IPV6=$(curl -sf "$CF_IPV6_URL") || { echo "Failed to fetch IPv6 ranges"; exit 1; }
 
-if [ -z "$IPV4" ]; then
-    echo "Empty IPv4 response from Cloudflare, aborting"
+if [ -z "$IPV4" ] || [ -z "$IPV6" ]; then
+    echo "Empty response from Cloudflare, aborting"
     exit 1
 fi
+
+# Refuse anything that is not a CIDR. A captive portal or error page served
+# with HTTP 200 would otherwise be written into nginx config as `allow <html>;`.
+validate_cidrs() {
+    while IFS= read -r ip; do
+        [ -z "$ip" ] && continue
+        if ! [[ "$ip" =~ ^[0-9a-fA-F.:]+/[0-9]{1,3}$ ]]; then
+            echo "Unexpected line in Cloudflare IP list: '$ip' — aborting"
+            exit 1
+        fi
+    done <<< "$1"
+}
+validate_cidrs "$IPV4"
+validate_cidrs "$IPV6"
 
 # --- Generate realip config ---
 REALIP_CONTENT="# Cloudflare Real IP restoration

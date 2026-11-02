@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import glob
 import re
 from pathlib import Path
 
 import click
 
-from bastion.output import console, print_error, print_success, print_table, print_warning
+from bastion.output import console, print_data, print_error, print_success, print_table, print_warning
 from bastion.runner import run
 
 
@@ -47,24 +48,34 @@ class Check:
 # ── SSH Checks ──────────────────────────────────────────────────────
 
 
+def _sshd_option(name: str) -> str:
+    """Effective value of an sshd_config option (lowercased), "" if unset.
+
+    sshd honours the *first* occurrence it reads, and Debian/Ubuntu's
+    sshd_config opens with `Include /etc/ssh/sshd_config.d/*.conf`, so the
+    drop-ins win. Cloud images put PasswordAuthentication there; reading only
+    the main file produced false failures.
+    """
+    files = sorted(glob.glob("/etc/ssh/sshd_config.d/*.conf")) + ["/etc/ssh/sshd_config"]
+    result = run(["grep", "-ih", f"^{name}[[:space:]]", *files], check=False, timeout=10)
+    first = result.stdout.splitlines()[0].split() if result.stdout.strip() else []
+    return first[-1].lower() if len(first) >= 2 else ""
+
+
 def _check_ssh_root_login(checks: list[Check]) -> None:
     c = Check("SSH", "Root login disabled", "PermitRootLogin should be 'no'")
-    result = run(
-        ["bash", "-c",
-         "grep -i '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null | tail -1"],
-        check=False, timeout=10,
-    )
-    value = result.stdout.strip().split()[-1].lower() if result.stdout.strip() else ""
+    value = _sshd_option("PermitRootLogin")
     if value == "no":
         c.pass_("PermitRootLogin no")
-    elif value in ("yes", ""):
-        setting = value if value else "not set (defaults to yes)"
+    elif value in ("", "prohibit-password", "without-password"):
+        # OpenSSH >= 7.0 defaults to prohibit-password
+        shown = value or "not set (defaults to prohibit-password)"
+        c.pass_(f"PermitRootLogin {shown} (key-only, acceptable)")
+    elif value == "yes":
         c.fail(
-            f"PermitRootLogin is {setting}",
-            "Add 'PermitRootLogin no' to /etc/ssh/sshd_config and restart sshd",
+            "PermitRootLogin is yes",
+            "Set 'PermitRootLogin no' in /etc/ssh/sshd_config.d/ and restart sshd",
         )
-    elif value in ("prohibit-password", "without-password"):
-        c.pass_(f"PermitRootLogin {value} (key-only, acceptable)")
     else:
         c.fail(f"Unexpected value: {value}")
     checks.append(c)
@@ -72,19 +83,14 @@ def _check_ssh_root_login(checks: list[Check]) -> None:
 
 def _check_ssh_password_auth(checks: list[Check]) -> None:
     c = Check("SSH", "Password auth disabled", "PasswordAuthentication should be 'no'")
-    result = run(
-        ["bash", "-c",
-         "grep -i '^PasswordAuthentication' /etc/ssh/sshd_config 2>/dev/null | tail -1"],
-        check=False, timeout=10,
-    )
-    value = result.stdout.strip().split()[-1].lower() if result.stdout.strip() else ""
+    value = _sshd_option("PasswordAuthentication")
     if value == "no":
         c.pass_("PasswordAuthentication no")
     elif value in ("yes", ""):
         setting = value if value else "not set (defaults to yes)"
         c.fail(
             f"PasswordAuthentication is {setting}",
-            "Add 'PasswordAuthentication no' to /etc/ssh/sshd_config and restart sshd",
+            "Set 'PasswordAuthentication no' in /etc/ssh/sshd_config.d/ and restart sshd",
         )
     else:
         c.fail(f"Unexpected value: {value}")
@@ -93,12 +99,7 @@ def _check_ssh_password_auth(checks: list[Check]) -> None:
 
 def _check_ssh_port(checks: list[Check]) -> None:
     c = Check("SSH", "Non-default SSH port", "Using a non-standard port reduces noise")
-    result = run(
-        ["bash", "-c",
-         "grep -i '^Port ' /etc/ssh/sshd_config 2>/dev/null | tail -1"],
-        check=False, timeout=10,
-    )
-    value = result.stdout.strip().split()[-1] if result.stdout.strip() else "22"
+    value = _sshd_option("Port") or "22"
     if value == "22":
         c.fail(
             "SSH on default port 22",
@@ -506,6 +507,18 @@ def audit_run(ctx: click.Context, category: str | None) -> None:
                 console.print(f"  [dim]- {c.name} (skipped: {c.detail})[/dim]")
                 skipped += 1
         console.print()
+
+    print_data("checks", [
+        {
+            "category": c.category,
+            "name": c.name,
+            "status": "skip" if c.passed is None else ("pass" if c.passed else "fail"),
+            "detail": c.detail,
+            "fix": c.fix_hint,
+        }
+        for c in checks
+    ])
+    print_data("score", {"passed": passed, "failed": failed, "skipped": skipped})
 
     # Score
     total = passed + failed

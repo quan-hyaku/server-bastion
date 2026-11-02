@@ -55,13 +55,13 @@ install_prerequisites() {
 
     if command -v apt-get &>/dev/null; then
         sudo apt-get update -qq
-        sudo apt-get install -y -qq curl git python3 python3-venv
+        sudo apt-get install -y -qq curl git rsync python3 python3-venv
     elif command -v dnf &>/dev/null; then
-        sudo dnf install -y -q curl git python3
+        sudo dnf install -y -q curl git rsync python3
     elif command -v yum &>/dev/null; then
-        sudo yum install -y -q curl git python3
+        sudo yum install -y -q curl git rsync python3
     else
-        warn "Unknown package manager. Ensure curl, git, and python3 are installed."
+        warn "Unknown package manager. Ensure curl, git, rsync, and python3 are installed."
     fi
 
     if ! command -v python3 &>/dev/null; then
@@ -269,12 +269,12 @@ $current_user ALL=(ALL) NOPASSWD: /usr/local/sbin/maldet, /usr/local/sbin/lmd
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run --scope --quiet --property=CPUQuota=*% nice -n 19 ionice -c3 /usr/local/sbin/maldet *
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/systemd-run --scope --quiet --property=CPUQuota=*% nice -n 19 ionice -c3 /usr/bin/clamscan *
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/nice, /usr/bin/ionice
-# LMD installation (one-time setup)
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /tmp/maldetect-install
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /tmp/maldetect-install
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/curl -sSL -o /tmp/maldetect-install/maldetect.tar.gz *
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/tar xzf /tmp/maldetect-install/maldetect.tar.gz -C /tmp/maldetect-install --strip-components=1
-$current_user ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/maldetect-install/install.sh
+# LMD installation (one-time setup; staged under root-only /var/lib, not /tmp)
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /var/lib/bastion/maldetect-install
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /var/lib/bastion/maldetect-install
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/curl -sSL -o /var/lib/bastion/maldetect-install/maldetect.tar.gz *
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/tar xzf /var/lib/bastion/maldetect-install/maldetect.tar.gz -C /var/lib/bastion/maldetect-install --strip-components=1 --no-same-owner
+$current_user ALL=(ALL) NOPASSWD: /usr/bin/bash /var/lib/bastion/maldetect-install/install.sh
 # LMD uninstall paths
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/maldetect
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/sbin/maldet
@@ -282,16 +282,20 @@ $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /usr/local/sbin/lmd
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /etc/cron.daily/maldet
 $current_user ALL=(ALL) NOPASSWD: /usr/bin/rm -rf /etc/cron.d/maldet"
 
-    echo "$sudoers_content" | sudo tee "$sudoers_file" > /dev/null
-    sudo chmod 0440 "$sudoers_file"
-
-    # Validate sudoers syntax
-    if sudo visudo -cf "$sudoers_file" &>/dev/null; then
-        success "Sudoers file created at $sudoers_file"
-    else
-        sudo rm -f "$sudoers_file"
-        fail "Sudoers syntax error — file removed. Please check and retry."
+    # Validate BEFORE installing. A malformed file in sudoers.d breaks sudo
+    # itself, which would also break the `sudo rm` that used to clean it up.
+    local tmp_sudoers
+    tmp_sudoers="$(mktemp)"
+    echo "$sudoers_content" > "$tmp_sudoers"
+    sudo chown root:root "$tmp_sudoers"
+    sudo chmod 0440 "$tmp_sudoers"
+    if ! sudo visudo -cf "$tmp_sudoers" &>/dev/null; then
+        sudo rm -f "$tmp_sudoers"
+        fail "Sudoers syntax error — nothing was installed. Please check and retry."
     fi
+    sudo install -m 0440 "$tmp_sudoers" "$sudoers_file"
+    sudo rm -f "$tmp_sudoers"
+    success "Sudoers file created at $sudoers_file"
 }
 
 # ── Step 7: Ensure PATH is persistent ─────────────────────────────

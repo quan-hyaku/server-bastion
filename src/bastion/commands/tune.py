@@ -78,16 +78,30 @@ def apply_preset(ctx: click.Context, preset: str, force: bool) -> None:
     if not force:
         click.confirm(f"Apply '{preset}' tuning preset?", abort=True)
 
+    known_keys = {"sysctl", "limits"}
+    unknown_keys = set(preset_data.keys()) - known_keys
+    if unknown_keys:
+        print_warning(f"Unknown preset keys ignored: {', '.join(sorted(unknown_keys))}")
+
     sysctl_values: dict[str, str] = preset_data.get("sysctl", {})
     for key, value in sysctl_values.items():
         run(["sysctl", "-w", f"{key}={value}"], use_sudo=True)
 
     if sysctl_values:
-        # Persist to config file
         cfg = get_config(ctx).tune
         lines = [f"{k} = {v}" for k, v in sysctl_values.items()]
         content = "\n".join(lines) + "\n"
         write_file_sudo(cfg.sysctl_conf, content)
+
+    limits_values: dict[str, str] = preset_data.get("limits", {})
+    if limits_values:
+        cfg = get_config(ctx).tune
+        lines = []
+        for item, value in limits_values.items():
+            lines.append(f"* soft {item} {value}")
+            lines.append(f"* hard {item} {value}")
+        content = "\n".join(lines) + "\n"
+        write_file_sudo(cfg.limits_conf, content)
 
     print_success(f"Preset '{preset}' applied.")
 
